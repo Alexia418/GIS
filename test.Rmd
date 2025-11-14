@@ -3,5 +3,12 @@ title: "test"
 output: html_document
 ---
 
-test
-test attempt2
+test test attempt2
+
+```{r warning=FALSE}
+library(terra)
+library(here)
+jan<-terra::rast("/Users/alexia/Documents/CASA/GIS/GIS-wk3/wc2/wc2.1_5m_tavg_01.tif")
+# have a look at the raster layer jan
+plot(jan)
+```
