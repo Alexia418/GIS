@@ -1,9 +1,6 @@
 ---
 title: "wk5_practical"
-output:
-  html_document: default
-  pdf_document: default
-runtime: shiny
+output: html_document
 ---
 ###Clear Memory First !!
 
