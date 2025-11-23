@@ -2,8 +2,11 @@
 title: "wk5_practical"
 output: html_document
 ---
+###Clear Memory First !!
+
 ```{r}
-knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls()) #removes all objects from workspace 
+gc() #clear memory
 ```
 
 ## plan
@@ -35,4 +38,85 @@ For the study area map
 - Map of Hotels
 - Combined comparison map
 
+## CRS and filter
+start with our OSM and Airbnb data which we need for our sub figures
+
+```{r}
+library(sf)
+library(tidyverse)
+
+# OSM data
+
+OSM <- st_read("wk5_data/greater-london-251122-free/gis_osm_pois_free_1.shp")%>%
+  st_transform(., 27700) %>%
+  #select hotels only
+  filter(fclass == 'hotel')
+```
+```{r}
+# Airbnb data
+Airbnb <- read_csv("wk5_data/listings.csv") %>%
+  # longitude is considered x value here, latitude is y
+  st_as_sf(., coords = c("longitude", "latitude"), 
+                   crs = 4326) %>%
+    st_transform(., 27700)%>%
+    #select entire places that are available all year
+    filter(room_type == 'Entire home/apt' & availability_365 =='365')
+
+
+#London Borough data is already in 277000
+Londonborough <- st_read("wk5_data/statistical-gis-boundaries-london/ESRI/London_Borough_Excluding_MHW.shp")%>%
+  st_transform(., 27700)
+```
+load the data needed for our study area map:  
+- World cities, filtering for Birmingham, London and Edinburgh  
+- An outline of the UK  
+
+```{r}
+# load world cities
+Worldcities <- st_read("wk5_data/World_Cities/World_Cities.shp") %>%
+  st_transform(., 27700)
+```
+```{r}
+# filter based on key cities
+Worldcities2 <- Worldcities %>%
+  filter(CNTRY_NAME=='United Kingdom'&
+           Worldcities$CITY_NAME=='Birmingham'|
+           Worldcities$CITY_NAME=='London'|
+           Worldcities$CITY_NAME=='Edinburgh')
+
+# load UK outline
+UK_outline <- st_read("wk5_data/gadm41_GBR_shp/gadm41_GBR_0.shp")%>%
+  st_transform(., 27700)
+```
+## join and sum
+```{r}
+Hotels <-  st_join(Londonborough, OSM)
+
+Airbnbs <-  st_join(Londonborough, Airbnb)
+
+head(Hotels)
+```
+```{r}
+#group_by()创建临时组，如果您要打印数据，只需指定组数，它看起来将与以前相同
+#summarise()采取小组并提供一个总结，这里是每个小组的计数
+Hotels_sum <- Hotels %>%
+  # we need to list the columns we want to keep in the summarise
+  group_by(., GSS_CODE, NAME)%>%
+  # for each group count the number of rows and store in a column called accomodation count.
+  summarise(`Accomodation count` = n())
+
+Airbnb_sum <- Airbnbs %>%
+  group_by(., GSS_CODE, NAME)%>%
+  summarise(`Accomodation count` = n())
+```
+```{r}
+# the st_join data = 0 Hotels
+Hotels %>%
+  filter(NAME=="Barking and Dagenham")
+```
+```{r}
+# the group by and summarise data = 1 Hotel!
+Hotels_sum %>%
+  filter(NAME=="Barking and Dagenham")
+```
 
