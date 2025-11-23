@@ -1,6 +1,9 @@
 ---
 title: "wk5_practical"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
+runtime: shiny
 ---
 ###Clear Memory First !!
 
@@ -119,4 +122,128 @@ Hotels %>%
 Hotels_sum %>%
   filter(NAME=="Barking and Dagenham")
 ```
+topology relationship  
+- st_intersects(A, B)- A（行政区）是否与B（OSM）接触或重叠。  
+返回行政区列表（33行）和每个行政区的酒店列表  
+- st_contains(A, B)- A（自治市）是否包含B（OSM）  
+返回行政区列表（33行）和每个行政区的酒店列表  
+- st_within(A, B)-是B（OSM）内的A（自治市）。这是在问酒店里面的行政区  
+返回酒店内的行政区列表，这会产生0的结果。如果我们翻转它，我们会得到一个结果但它将是酒店的长度（例如st_within(OSM, Londonborough)）。注意，st_within(A, B) == st_contains(B, A)  
+
+```{r}
+Hotels_example <-st_contains(Londonborough, OSM)
+
+Hotels_example
+#如果您以前使用过图形用户界面GIS，这与select by location（例如QGIS中的按位置选择）相同，使用dplyr的过滤器与select by attribute相同
+```
+```{r}
+#按区来取该列表的长度
+Accomodation_contained <- Londonborough%>%
+  mutate(hotels_n = lengths(st_contains(., OSM)))%>%
+  mutate(airbnbs_n = lengths(st_contains(., Airbnbs)))
+```
+
+```{r}
+# the group by and summarise data = 1 Hotel!
+Accomodation_contained %>%
+  filter(NAME=="Barking and Dagenham")
+```
+##key advice
+何时使用st_join()或拓扑关系   
+st_join()链接两个空间对象的属性
+```{r}
+Hotels2 <-  st_join(OSM, Londonborough)
+#连接相同几何形状的多边形或点
+#London_data <-  st_join(London_borough_data1, London_borough_data2, join=st_equals)
+```
+
+##mapping
+```{r}
+remotes::install_github("r-tmap/tmap")
+```
+tmap works on the principle of:    
+- loading your shape object with tm_shape() (here sf object, but it could be a raster)   
+- setting the map layer (e.g. polygons (tm_polygons()), symbols (tm_symbols()),raster (tm_raster()), text (tm_text()), lines (tm_lines()) etc).   
+- applying a derived function (e.g. border (tm_borders()), fill (tm_fill()), markers (tm_markers()).  
+
+```{r}
+library(tmap)
+
+# change to "view" for an interactive map
+tmap_mode("plot")
+```
+
+```{r}
+# set the shape
+tm1 <- tm_shape(Accomodation_contained) + 
+  # set the map layer
+  # try changing this to tm_symbols()
+  tm_polygons("hotels_n",
+              col = "black", lwd=0.5, lty="dashed",)
+
+# plot the map
+tm1
+```
+```{r}
+#Here, where we have map layer (e.g tm_polyons()) the derived function (e.g. border colour) is within the map layer function.如果只想要边框
+tm_no_map_layer <- tm_shape(Accomodation_contained) + 
+  # there is no tm_polygons() if we just want the map with no spatial data
+  tm_borders(col = "darkblue")
+
+tm_no_map_layer
+```
+```{r}
+tmap_mode("plot")
+```
+```{r}
+# plot each map
+tm1 <- tm_shape(Accomodation_contained) + 
+  tm_polygons(fill ="hotels_n",
+              col = "black", 
+              lwd =0.5,
+              lty="dashed",
+              fill.chart = tm_chart_violin(),
+              # above this was the same as before
+              fill.scale = tm_scale_intervals(
+                values="brewer.bu_pu",
+                n=5,
+                style="jenks"))
+
+tm1
+```
+In the above code we have:  
+
+- tm_scale_intervals() - used for numerical data  
+- values - the values to use to style the map, here it’s blue from the colour brewer list. There are a number of options here. See the next code chunk.   
+- n - the number of breaks to have   
+- style - how to decide where to make the breaks. We have a lot of choice for this. See the interval scale reference. Jenks looks for the natural breaks in the data and is often used.   
+- fill_chart() produces a summary of the mapped data with a violin plot, there are many options see the tmap chart vigette   
+
+```{r}
+#color option
+#install.packages(c("shinyjs", "kableExtra", "colorblindcheck"))
+#library(colorblindcheck)
+cols4all::c4a_gui()
+```
+##complete map
+```{r}
+#set up our breaks to see which dataset has the greatest range
+stats <- Accomodation_contained %>%
+  st_drop_geometry() %>%
+  dplyr::select(hotels_n, airbnbs_n) %>%  
+  summarise(across(everything(), list(
+    min = min,
+    max = max,
+    mean = mean,
+    median = median,
+    sd = sd
+  )))
+```
+```{r}
+#由于爱彼迎的范围最大，我们将用它来生成我们的breaks，并将其应用于两个数据集
+#library(classInt)
+
+```
+
+
 
