@@ -1,28 +1,38 @@
 ---
 title: "wk5_practical"
 output: html_document
-date: "2025-11-22"
 ---
-
-```{r setup, include=FALSE}
+```{r}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
+## plan
+**1. Downloading data**
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+For the hotels and Airbnb figures
+- London borough MSOAs (shp)
+- Airbnbs (csv)
+- Hotels (shp)
+For the study area map
+- Outline of the UK (shp)
+- UK cities (shp)
+
+**2. Setting the CRS and filtering**
+
+- CRS for the boroughs: British National Grid (BNG)
+- Filter hotels from the OSM data
+- Filter equivalent Airbnbs  
+  (e.g., room_type == "Entire home/apt" & availability_365 == 365)
+
+**3. Joining and summing data**
+
+- Join Airbnbs to MSOAs and count per MSOA
+- Join Hotels to MSOAs and count per MSOA
+
+**4. Making some maps**
+
+- Map of Airbnbs
+- Map of Hotels
+- Combined comparison map
 
 
-```{r cars}
-summary(cars)
-```
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
