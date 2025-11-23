@@ -53,3 +53,5 @@ rsconnect/
 .RData
 .Ruserdata
 Data/*
+greater-london-251122-free/*
+statistical-gis-boundaries-london/*
