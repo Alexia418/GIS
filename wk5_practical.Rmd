@@ -60,7 +60,7 @@ Airbnb <- read_csv("wk5_data/listings.csv") %>%
                    crs = 4326) %>%
     st_transform(., 27700)%>%
     #select entire places that are available all year
-    filter(room_type == 'Entire home/apt' & availability_365 ==365)
+    filter(room_type == 'Entire home/apt' & availability_365 =='365')
 
 #London Borough data is already in 277000
 Londonborough <- st_read("wk5_data/statistical-gis-boundaries-london/ESRI/London_Borough_Excluding_MHW.shp")%>%
@@ -253,6 +253,62 @@ breaks <- Accomodation_contained%>%
   
 breaks$brks
 ```
+```{r}
+Hidetm1 <- tm_shape(Accomodation_contained) +
+    tm_polygons(
+      fill = c("hotels_n", "airbnbs_n"),
+      fill.scale = tm_scale_intervals(values = "brewer.blues", breaks=breaks$brks),
+      # set the legend
+      fill.legend = tm_legend(title="Accomodation count",
+                              title.size=0.85,
+                              size=0.8,
+                              # plot outside of the main map
+                              #explained below
+                              position=tm_pos_out("right", 
+                                                  "center",
+                                                  pos.v = "center")),
+      # all facets share the same legend
+      fill.free = FALSE)+
+  # make 2 rows for the facets
+  tm_facets(nrow=2)
 
+tm1
+```
+```{r}
+# change headings or remove
+
+tm2 <- tm1+
+  tm_layout(panel.labels=c("Hotels", "Airbnb"),
+            panel.show = TRUE
+            #panel.label.bg.color = "transparent",
+            )+
+  
+  tm_compass(type= "arrow",
+            size=1.8, 
+            position = tm_pos_out("right", 
+                                  "center",
+                                  pos.h= -0.05,
+                                  pos.v =0.72))+
+  tm_scalebar(text.size = 0.7,
+              width=10,
+              breaks=c(0,10,20),
+              position = tm_pos_out("right",
+                                    "center", 
+                                    pos.h=0.075,
+                                    pos.v = 0.68))+
+  # we could use tm_credits to place sub-titles like (A) or (B)
+  # on the map.
+  tm_credits("(c) OpenStreetMap contrbutors and Air b n b",
+             size=0.6,
+             position = tm_pos_out("center",
+                                   "bottom",
+                                   pos.v = 1.5,
+                                   pos.h=-0.02))
+
+tm2
+```
+```{r}
+tmap_save(tm2, "prac5_data/1_facet.png", width = 8, height = 6, units="in", dpi = 300)
+```
 
 
