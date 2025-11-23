@@ -63,8 +63,7 @@ Airbnb <- read_csv("wk5_data/listings.csv") %>%
                    crs = 4326) %>%
     st_transform(., 27700)%>%
     #select entire places that are available all year
-    filter(room_type == 'Entire home/apt' & availability_365 =='365')
-
+    filter(room_type == 'Entire home/apt' & availability_365 ==365)
 
 #London Borough data is already in 277000
 Londonborough <- st_read("wk5_data/statistical-gis-boundaries-london/ESRI/London_Borough_Excluding_MHW.shp")%>%
@@ -99,6 +98,7 @@ Airbnbs <-  st_join(Londonborough, Airbnb)
 
 head(Hotels)
 ```
+
 ```{r}
 #group_by()创建临时组，如果您要打印数据，只需指定组数，它看起来将与以前相同
 #summarise()采取小组并提供一个总结，这里是每个小组的计数
@@ -112,6 +112,7 @@ Airbnb_sum <- Airbnbs %>%
   group_by(., GSS_CODE, NAME)%>%
   summarise(`Accomodation count` = n())
 ```
+
 ```{r}
 # the st_join data = 0 Hotels
 Hotels %>%
@@ -222,12 +223,15 @@ In the above code we have:
 ```{r}
 #color option
 #install.packages(c("shinyjs", "kableExtra", "colorblindcheck"))
-#library(colorblindcheck)
+library(colorblindcheck)
 cols4all::c4a_gui()
 ```
 ##complete map
 ```{r}
 #set up our breaks to see which dataset has the greatest range
+library(tidyverse)
+library(dplyr)
+library(sf)
 stats <- Accomodation_contained %>%
   st_drop_geometry() %>%
   dplyr::select(hotels_n, airbnbs_n) %>%  
@@ -239,10 +243,18 @@ stats <- Accomodation_contained %>%
     sd = sd
   )))
 ```
+
 ```{r}
 #由于爱彼迎的范围最大，我们将用它来生成我们的breaks，并将其应用于两个数据集
-#library(classInt)
-
+library(classInt)
+# Get Jenks breaks for 5 classes
+breaks <- Accomodation_contained%>%
+  st_drop_geometry()%>%
+  #need a numeric vector not a dataframe or tibble
+  pull(airbnbs_n) %>%             
+  classIntervals(., n = 5, style = "jenks")
+  
+breaks$brks
 ```
 
 
