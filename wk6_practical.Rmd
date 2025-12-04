@@ -1,0 +1,108 @@
+---
+title: "wk6_practical"
+output: html_document
+---
+```{r}
+#first library a few packages that we will use during the practical
+#note you may need to install them first...
+library(spatstat)
+library(here)
+library(sp)
+library(tmap)
+library(sf)
+library(tmaptools)
+```
+```{r}
+##First, get the London Borough Boundaries
+LondonBoroughs <- st_read(here::here("statistical-gis-boundaries-london", "ESRI", "London_Borough_Excluding_MHW.shp"))
+```
+```{r}
+# Or use this to read in directly.
+#LondonBoroughs <- st_read("https://opendata.arcgis.com/datasets/8edafbe3276d4b56aec60991cbddda50_4.geojson")
+```
+
+```{r}
+library(stringr)
+BoroughMap <- LondonBoroughs %>%
+  dplyr::filter(str_detect(GSS_CODE, "^E09"))%>%
+  st_transform(., 27700)
+
+qtm(BoroughMap)
+```
+```{r}
+summary(BoroughMap)
+```
+```{r}
+##Now get the location of all Blue Plaques in the City
+BluePlaques <- st_read("https://s3.eu-west-2.amazonaws.com/openplaques/open-plaques-london-2023-11-10.geojson")
+```
+
+```{r}
+#或者在本地文件夹中读取
+#BluePlaques <- st_read(here::here("open-plaques-london-2018-04-08.geojson")) %>%
+#st_transform(.,27700)
+```
+
+```{r}
+summary(BluePlaques)
+```
+```{r}
+
+#plot the blue plaques in the city
+tmap_mode("plot")
+
+tm_shape(BoroughMap) +
+  tm_polygons(fill_alpha = 0.5)+
+tm_shape(BluePlaques) +
+  tm_dots(fill = "blue", size=0.1)
+```
+##数据清理
+```{r}
+#remove duplicates
+library(tidyverse)
+
+library(sf)
+BluePlaques <- distinct(BluePlaques)
+```
+
+```{r}
+BluePlaques <- BluePlaques %>% 
+  st_transform(st_crs(BoroughMap))
+```
+
+
+##空间子集
+```{r}
+#drops any plaque points that don’t touch/lie within a London borough
+BluePlaquesSub <- BluePlaques[BoroughMap,]
+
+#plot the blue plaques in the city
+tmap_mode("plot")
+
+#check to see that they've been removed
+tm_shape(BoroughMap) +
+  tm_polygons(fill_alpha = 0.5)+
+tm_shape(BluePlaquesSub) +
+  tm_dots(fill = "blue", size=0.1)
+```
+```{r}
+#识别自治市镇轮廓内的点，使用具有它们相交位置的指数的函数
+# add sparse=false to get the complete matrix.
+# this is the same as select by location in QGIS
+# filter from dplyr is the same as select by attribute 
+intersect_indices <-st_intersects(BoroughMap, BluePlaques)
+```
+
+##Spatial clipping空间剪切
+用于分层并提取，寻找两个不同数据集的多边形在哪里重叠
+Select points or polygons in a polygon (Selecting data by location) = spatial sub-setting. This is just presence or absence within (or whatever function we use) an sf object.在多边形中选择点或多边形（按位置选择数据）=空间子设置。这只是在sf对象中（或我们使用的任何功能）中的存在或不存在       
+
+Determine where datasets overlap (or touch, or don’t overlap) and extract those parts = spatial clipping 确定数据集重叠的位置（或触摸或不重叠）并提取这些部分=空间剪切
+
+Join two spatial datasets together = spatial joining, which can use spatial subsetting functions as the default is st_intersects(). This function joins spatial data. 将两个空间数据集连接在一起=空间连接，可以使用空间子集函数，默认为st_intersects()这个函数连接空间数据   
+
+Finally,Selecting data by attributes = filtering or selecting rows / columns with dplyr 按属性选择数据=使用dplyr过滤或选择行/列
+
+
+
+
