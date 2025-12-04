@@ -55,3 +55,4 @@ rsconnect/
 Data/*
 wk5_data/*
 statistical-gis-boundaries-london/*
+rosm.cache/*
