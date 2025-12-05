@@ -1,0 +1,224 @@
+---
+title: "wk8_practical"
+output: html_document
+---
+在本实践中，您將被介紹一套不同的模型，這些模型將允許您透過對兩個或多個空間參考變數之間的關聯進行建模來測試各種研究問題和假設。
+
+在工作示例中，我们将探索可能影响伦敦16岁平均考试分数的因素。GSCE是中學教育結束時參加的考試，這裡已彙總了全市所有學生的家庭地址，包括病房地理區域。
+
+伦敦数据存储整理了每个病房的一系列其他变量，因此我们将看看其中是否有任何变量能够帮助解释我们看到的考试表现模式。
+
+```{r}
+#library a bunch of packages we may (or may not) use - install them first if not installed already. 
+library(tidyverse)
+library(tmap)
+library(plotly)
+library(broom)
+library(mapview)
+library(sf)
+library(sp)
+library(spdep)
+library(car)
+library(fs)
+library(janitor)
+```
+
+```{r}
+#download a zip file containing some boundaries we want to use
+
+download.file("https://data.london.gov.uk/download/statistical-gis-boundary-files-london/9ba8c833-6370-4b11-abdc-314aa020d5e0/statistical-gis-boundaries-london.zip", 
+              destfile="wk7_data/statistical-gis-boundaries-london.zip")
+```
+
+
+Get the zip file and extract it
+```{r}
+library(fs)
+listfiles<-dir_info(here::here("wk7_data")) %>%
+  dplyr::filter(str_detect(path, ".zip")) %>%
+  dplyr::select(path)%>%
+  pull()%>%
+  #print out the .gz file
+  print()%>%
+  as.character()%>%
+  utils::unzip(exdir=here::here("wk7_data"))
+```
+
+```{r}
+#look what is inside the zip
+
+Londonwards<-fs::dir_info(here::here("wk7_data", 
+                                 "statistical-gis-boundaries-london", 
+                                 "ESRI"))%>%
+  #$ means exact match
+  dplyr::filter(str_detect(path, 
+                           "London_Ward_CityMerged.shp$"))%>%
+  dplyr::select(path)%>%
+  dplyr::pull()%>%
+  #read in the file in
+  sf::st_read()
+```
+```{r}
+#check the data
+qtm(Londonwards)
+```
+
+```{r}
+#read in some attribute data
+LondonWardProfiles <- read_csv("https://data.london.gov.uk/download/f33fb38c-cb37-48e3-8298-84c0d3cc5a6c/772d2d64-e8c6-46cb-86f9-e52b4c7851bc/ward-profiles-excel-version.csv", 
+                               col_names = TRUE, 
+                               locale = locale(encoding = 'Latin1'))
+```
+```{r}
+#check all of the columns have been read in correctly
+Datatypelist <- LondonWardProfiles %>% 
+  summarise_all(class) %>%
+  pivot_longer(everything(), 
+               names_to="All_variables", 
+               values_to="Variable_class")
+
+Datatypelist
+```
+
+###在读取时清理数据
+
+检查上面读取的数据集，你可以看到数据集中的一些字段本应读取为数字数据，实际上已被读取为字符（文本）数据。
+
+如果你检查你的数据文件，你就会明白为什么。在一些缺少数据的列中，而不是空白单元格，输入了值“n/a”。当这些文本值出现在数字之间时，软件将自动假设整个列是文本。
+
+为了处理这些错误，我们可以强制read_csv忽略这些值，告诉它要注意哪些值表明缺少数据
+
+```{r}
+#We can use readr to deal with the issues in this dataset - which are to do with text values being stored in columns containing numeric values
+
+#read in some data - couple of things here. Read in specifying a load of likely 'n/a' values, also specify Latin1 as encoding as there is a pound sign (£) in one of the column headers - just to make things fun!
+
+LondonWardProfiles <- read_csv("https://data.london.gov.uk/download/ward-profiles-and-atlas/772d2d64-e8c6-46cb-86f9-e52b4c7851bc/ward-profiles-excel-version.csv", 
+                               na = c("", "NA", "n/a"), 
+                               locale = locale(encoding = 'Latin1'), 
+                               col_names = TRUE)
+```
+```{r}
+#check all of the columns have been read in correctly
+Datatypelist <- LondonWardProfiles %>% 
+  summarise_all(class) %>%
+  pivot_longer(everything(), 
+               names_to="All_variables", 
+               values_to="Variable_class")
+
+Datatypelist
+```
+
+现在您已经读取了边界数据和属性数据，您需要使用通用ID将两者合并在一起。在这种情况下，我们可以使用病房代码来实现连接
+
+```{r}
+#merge boundaries and data
+LonWardProfiles <- Londonwards%>%
+  left_join(.,
+            LondonWardProfiles, 
+            by = c("GSS_CODE" = "New code"))
+
+
+#let's map our dependent variable to see if the join has worked:
+tmap_mode("plot")
+qtm(LonWardProfiles, 
+    fill = "Average GCSE capped point scores - 2014", 
+    fill.palette = "Blues")
+```
+
+除了我们的主要数据集外，添加一些上下文数据可能也很有用。虽然我们的考试成绩已经记录在学生的家庭地址，但大多数学生都会在该市的一所学校上学。
+让我们也添加一些学校数据。在st_as_sf函数中，x是经度，y是纬度
+
+```{r}
+#might be a good idea to see where the secondary schools are in London too
+london_schools <- read_csv("https://data.london.gov.uk/download/146392df-b051-42ad-b8ec-454e440f0f8b/57046151-39a0-45d9-8dc0-27ea7fd02de8/all_schools_xy_2016.csv")
+
+#from the coordinate values stored in the x and y columns, which look like they are latitude and longitude values, create a new points dataset
+lon_schools_sf <- st_as_sf(london_schools, 
+                           coords = c("x","y"), 
+                           crs = 4326)
+
+lond_sec_schools_sf <- lon_schools_sf %>%
+  filter(PHASE=="Secondary")
+
+tmap_mode("plot")
+qtm(lond_sec_schools_sf, size=0.2)
+```
+##测试研究假设
+为了探索可能影响伦敦GCSE考试表现的因素，我们将运行一系列不同的回归模型。回归模型只是我们的结果变量（伦敦每个区的平均GCSE分数）与另一个变量或几个可能解释这个结果的变量之间的线性关系的表达。
+###研究问题和假设
+检查上图中GSCE分数的空间分布，很明显，整个城市都有差异。我的研究问题是：
+
+哪些因素可能导致整个城市平均GCSE分数发生变化？
+
+我要测试的研究假设是，在伦敦的沃德斯，还有其他可观察到的因素可能会影响居住在这些地区的学生的平均GCSE分数。
+
+在推理统计学中，我们无法明确地证明假设是真实的，但我们可以寻求反驳变量之间绝对没有发生任何有趣的事或没有关联。我将用一些模型进行实证测试的空假设是，整个伦敦的考试分数与其他观测变量之间没有关系。
+
+##Regression Basics
+回归模型中的线性关系可能最容易使用散点图来解释...
+
+```{r}
+q <- qplot(x = `Unauthorised Absence in All Schools (%) - 2013`, 
+           y = `Average GCSE capped point scores - 2014`, 
+           data=LonWardProfiles)
+```
+```{r}
+#plot with a regression line - note, I've added some jitter here as the x-scale is rounded
+q + stat_smooth(method="lm", se=FALSE, size=1) + 
+  geom_jitter()
+```
+在这里，我根据数据集中的另一个变量绘制了伦敦每个区的平均GCSE分数，我认为可能具有影响力：每个区因未经授权缺勤而损失的上学天数的百分比。
+
+请记住，我的空假设是，GCSE分数和未经授权的缺课之间没有关系。如果这个空假设是真的，那么我预计在上面绘制的点云中不会看到任何模式。
+
+就其目而言，散点图表明，一般来说，作为x轴自变量（未经授权的缺席）上升，我们的y轴依赖变量（GCSE分数）下降。这不是一个随机的点云，而是表明这里可能存在关系，所以我可能想拒绝我的空假设。
+
+##Regression Model in R
+在上图中，我在ggplot2的stat_smooth()函数中使用了一种叫做“lm”的方法来绘制回归线。“lm”代表“线性模型”，是R中运行线性回归模型的标准函数。使用帮助系统来了解更多关于lm的信息-?lm
+
+以下是可用于在我们的散点图中绘制蓝线的代码。请注意，波浪符号~表示“被建模”。
+
+不过，首先，我们将用Janitor清理我们所有的数据名称，然后选择我们想要的。
+```{r}
+#run the linear regression model and store its outputs in an object called model1
+Regressiondata<- LonWardProfiles%>%
+  clean_names()%>%
+  dplyr::select(average_gcse_capped_point_scores_2014, 
+                unauthorised_absence_in_all_schools_percent_2013)
+
+#now model
+model1 <- Regressiondata %>%
+  lm(average_gcse_capped_point_scores_2014 ~
+               unauthorised_absence_in_all_schools_percent_2013,
+     data=.)
+```
+
+```{r}
+#show the summary of those outputs
+summary(model1)
+```
+
+```{r}
+library(broom)
+tidy(model1)
+```
+
+我们还可以使用broom的glance()来获取更多的摘要信息，例如R^2和调整后的r平方值
+```{r}
+glance(model1)
+```
+
+我们不是尝试根据未经授权的缺席变量对我们的GCSE值进行建模吗？我们可以看到每个点的预测吗，是的，是的，我们可以......使用tidypredict的tidypredict_to_column()函数，该函数在以下代码中添加了fit。
+
+```{r}
+library(tidypredict)
+Regressiondata %>%
+  tidypredict_to_column(model1)
+```
+
+##tidymodels
+```{r}
+library(tidymodels)
+```
+
